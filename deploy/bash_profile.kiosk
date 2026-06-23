@@ -1,0 +1,50 @@
+[[ -f ~/.profile ]] && source ~/.profile
+
+# Only run on tty1 autologin, not in SSH sessions
+if [[ -z "${DISPLAY:-}" && "${XDG_VTNR:-}" == "1" ]]; then
+
+    # Wait for a real HDMI connector to appear as connected in DRM sysfs.
+    # Writeback-* virtual connectors also show "connected" — we skip those.
+    # On Pi 5 the display connector is card1-HDMI-A-2 (micro-HDMI port closest to USB-C).
+    for i in $(seq 1 30); do
+        for status in /sys/class/drm/card1-HDMI-A-*/status; do
+            [[ -r "$status" ]] && grep -qs "^connected$" "$status" && HDMI_READY=1 && break 2
+        done
+        sleep 1
+    done
+
+    if [[ -z "${HDMI_READY:-}" ]]; then
+        echo "[kiosk] No HDMI display detected after 30s, dropping to shell." >&2
+        return
+    fi
+
+    # Give DRM one extra second so the mode list is fully populated
+    sleep 1
+
+    # Wait for logind to create XDG_RUNTIME_DIR (created asynchronously at autologin)
+    RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    for i in $(seq 1 20); do
+        [[ -d "$RUNTIME_DIR" ]] && break
+        sleep 0.5
+    done
+
+    /usr/bin/weston --config=/etc/startracker/weston.ini --log=/tmp/weston.log &
+    WESTON_PID=$!
+
+    # Wait for Weston Wayland socket
+    for i in $(seq 1 50); do
+        [[ -S "${RUNTIME_DIR}/wayland-1" ]] && break
+        sleep 0.2
+    done
+
+    export WAYLAND_DISPLAY=wayland-1
+
+    while true; do
+        /usr/local/bin/startracker-ui >> /tmp/startracker-ui.log 2>&1
+        sleep 1
+    done &
+    UI_LOOP_PID=$!
+
+    wait $WESTON_PID
+    kill $UI_LOOP_PID 2>/dev/null
+fi

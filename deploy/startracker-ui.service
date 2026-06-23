@@ -1,0 +1,19 @@
+[Unit]
+Description=StarTracker Qt6 kiosk frontend (Weston + UI)
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/weston --config=/etc/startracker/weston.ini
+Restart=on-failure
+RestartSec=3
+# XDG_RUNTIME_DIR is set automatically by systemd for user services.
+# Do NOT hard-code /run/user/1000 here.
+#
+# NOTE: This service file is kept for reference but is NOT the active launch
+# method.  Weston 14 kiosk-shell does not support the client= directive, and
+# a user service running via linger lacks an active logind seat (required by
+# libseat).  The kiosk is instead launched from ~/.bash_profile on tty1.
+# See deploy/install.sh step [6/6].
+
+[Install]
+WantedBy=default.target

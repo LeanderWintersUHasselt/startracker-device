@@ -1,0 +1,27 @@
+[Unit]
+Description=StarTracker backend daemon
+After=network.target
+
+[Service]
+Type=simple
+# Wait for the camera to be available before starting — at boot,
+# PipeWire briefly holds /dev/media0, causing rpicam-vid to fail silently.
+ExecStartPre=/bin/sh -c 'killall rpicam-vid 2>/dev/null; sleep 0.5; for i in $(seq 1 30); do rpicam-vid --list-cameras 2>&1 | grep -q imx708 && exit 0; sleep 1; done; exit 1'
+User=startracker
+Group=startracker
+ExecStart=/usr/local/bin/startracker
+ExecStartPost=/usr/local/bin/startracker-autostart-track
+WorkingDirectory=/usr/local/bin
+Environment=STARTRACKER_LOG_DIR=/home/startracker
+CPUAffinity=1 2 3
+Restart=always
+RestartSec=2
+TimeoutStopSec=10
+RuntimeDirectory=startracker
+RuntimeDirectoryMode=0755
+UMask=0022
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
